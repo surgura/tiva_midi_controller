@@ -1,16 +1,1 @@
-# Rust build artifacts
 /target/
-Cargo.lock
-
-# Old C build artifacts (can be removed)
-/build/
-
-# Editor artifacts
-*.swp
-*.swo
-*~
-.idea/
-.vscode/
-
-# Debug files
-*.lst
