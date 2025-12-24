@@ -1,0 +1,21 @@
+# Build artifacts
+build/
+*.o
+*.elf
+*.bin
+*.hex
+*.map
+*.lst
+
+# Editor
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/c_cpp_properties.json
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
