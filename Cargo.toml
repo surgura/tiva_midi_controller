@@ -1,0 +1,25 @@
+[package]
+name = "tiva_controller"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <you@example.com>"]
+description = "Bare-metal firmware for TM4C123GXL LaunchPad"
+
+[dependencies]
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
+tm4c123x = "0.9"
+
+[profile.dev]
+opt-level = "s"
+lto = false
+debug = true
+overflow-checks = false
+
+[profile.release]
+opt-level = "s"
+lto = true
+debug = true
+overflow-checks = false
+

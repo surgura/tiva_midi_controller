@@ -1,21 +1,16 @@
-# Build artifacts
-build/
-*.o
-*.elf
-*.bin
-*.hex
-*.map
-*.lst
+# Rust build artifacts
+/target/
+Cargo.lock
 
-# Editor
-.vscode/*
-!.vscode/launch.json
-!.vscode/tasks.json
-!.vscode/c_cpp_properties.json
+# Old C build artifacts (can be removed)
+/build/
+
+# Editor artifacts
 *.swp
+*.swo
 *~
+.idea/
+.vscode/
 
-# OS
-.DS_Store
-Thumbs.db
-
+# Debug files
+*.lst
