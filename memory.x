@@ -7,3 +7,6 @@ MEMORY
     RAM   : ORIGIN = 0x20000000, LENGTH = 32K
 }
 
+/* Increase stack size for USB initialization (default is 1KB) */
+_stack_size = 0x2000;  /* 8KB stack */
+
