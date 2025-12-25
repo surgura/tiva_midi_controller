@@ -106,10 +106,10 @@ pub fn get_string_descriptors() -> *const *const u8 {
 /// Control handler callback
 #[no_mangle]
 pub unsafe extern "C" fn control_handler(
-    pv_cb_data: *mut c_void,
-    ui32_event: u32,
-    ui32_msg_value: u32,
-    pv_msg_data: *mut c_void,
+    _pv_cb_data: *mut c_void,
+    _ui32_event: u32,
+    _ui32_msg_value: u32,
+    _pv_msg_data: *mut c_void,
 ) -> u32 {
     // Event 7 = USB_EVENT_CONNECTED (device connected to host)
     // Event values from usblib.h:
