@@ -1,6 +1,3 @@
-# Build in WSL: make
-# Flash in Windows: make flash
-
 TARGET = thumbv7em-none-eabihf
 ELF_RELEASE = target/$(TARGET)/release/tiva_controller
 BIN = $(ELF_RELEASE).bin
