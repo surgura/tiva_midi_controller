@@ -7,6 +7,21 @@ MEMORY
     RAM   : ORIGIN = 0x20000000, LENGTH = 32K
 }
 
-/* Increase stack size for USB initialization (default is 1KB) */
-_stack_size = 0x2000;  /* 8KB stack */
+/* Stack size - reduced from 8KB to test if stack overflow is causing issues */
+_stack_size = 0x1000;  /* 4KB stack */
+
+/* TivaWare IntRegister() requires a RAM vector table (.vtable section)
+ * that is 1KB-aligned and placed at the start of SRAM.
+ * This allows TivaWare to dynamically register interrupt handlers.
+ */
+SECTIONS
+{
+    /* Place .vtable section at start of RAM, 1KB-aligned */
+    .vtable (NOLOAD) : ALIGN(1024)
+    {
+        . = ALIGN(1024);
+        *(.vtable)
+        . = ALIGN(1024);
+    } > RAM
+}
 

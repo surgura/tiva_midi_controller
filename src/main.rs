@@ -7,6 +7,30 @@ use tm4c123x::{GPIO_PORTD, GPIO_PORTF, SYSCTL};
 use core::ptr;
 use core::ffi::c_void;
 
+// HardFault handler to debug crashes
+#[exception]
+unsafe fn HardFault(ef: &cortex_m_rt::ExceptionFrame) -> ! {
+    let sysctl = unsafe { &*SYSCTL::ptr() };
+    let portf = unsafe { &*GPIO_PORTF::ptr() };
+    
+    // Enable GPIO Port F
+    sysctl.rcgcgpio.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 5)) });
+    while sysctl.prgpio.read().bits() & (1 << 5) == 0 {}
+    
+    // Configure PF1 as output
+    portf.dir.modify(|r, w| unsafe { w.bits(r.bits() | 0x02) });
+    portf.den.modify(|r, w| unsafe { w.bits(r.bits() | 0x02) });
+    
+    // Blink LED rapidly to indicate HardFault
+    // The fault address is in ef.fault_address, PC is in ef.pc
+    loop {
+        portf.data.modify(|r, w| unsafe { w.bits(r.bits() ^ 0x02) });
+        for _ in 0..10_000 {
+            cortex_m::asm::nop();
+        }
+    }
+}
+
 // Custom panic handler that blinks LED rapidly (replaces panic_halt)
 #[panic_handler]
 fn panic_handler(_info: &core::panic::PanicInfo) -> ! {
@@ -99,8 +123,9 @@ fn main() -> ! {
         usb_device::usb_set_device_mode(0);
     }
     
-    // Get string descriptors array - must store in variable to avoid dangling pointer
-    let string_descriptors = usb_descriptors::get_string_descriptors();
+    // Get pointer to static string descriptor array
+    // This is safe because the array is static and lives for the entire program lifetime
+    let string_descriptors_ptr = usb_descriptors::get_string_descriptors();
     
     // Create CDC device structure as static (like C example uses global static)
     // This ensures it lives for the lifetime of the program
@@ -118,16 +143,11 @@ fn main() -> ! {
             pvRxCBData: ptr::null_mut(),
             pfnTxCallback: Some(usb_descriptors::tx_handler),
             pvTxCBData: ptr::null_mut(),
-            ppui8StringDescriptors: string_descriptors.as_ptr() as *const *const u8,
+            ppui8StringDescriptors: string_descriptors_ptr,
             ui32NumStringDescriptors: 6,
-            sPrivateData: usb_device::tCDCSerInstance {
-                ui32Base: 0,
-                ui32Flags: 0,
-                ui16USBBase: 0,
-                ui16USBEndpoint: 0,
-                ui8USBInterface: 0,
-                ui8InterfaceData: 0,
-            },
+            // sPrivateData will be fully initialized by USBDCDCInit
+            // We just need to zero-initialize it to ensure proper layout
+            sPrivateData: unsafe { core::mem::zeroed() },
         });
         
         // Set callback data to point to the CDC device structure (like C example)
@@ -138,9 +158,10 @@ fn main() -> ! {
         }
     }
     
-    // Register USB interrupt handler BEFORE USBDCDCInit
-    // USBDCDInit (called by USBDCDCInit) will enable the interrupt at NVIC level
-    // but we need to register the handler first
+    // CRITICAL: First call to external C code - USBDCDCInit
+    // Note: The C example doesn't call USBIntRegister explicitly - it relies on
+    // the interrupt vector table in the startup file. We call it here to ensure
+    // the handler is registered in the RAM vector table before USBDCDInit enables interrupts.
     unsafe {
         usb_device::USBIntRegister(
             usb_device::usb_base::USB0_BASE,
@@ -172,7 +193,14 @@ fn main() -> ! {
         
         // Enable global interrupts (like C example does after USBDCDCInit)
         // USBDCDInit already calls USBDevConnect and enables USB interrupt at NVIC
+        // NOTE: Interrupts must be enabled BEFORE entering main loop
+        // so USB interrupts can be processed
         cortex_m::interrupt::enable();
+    }
+    
+    // Small delay to allow USB to stabilize
+    for _ in 0..1_000_000 {
+        cortex_m::asm::nop();
     }
 
     // Main loop - slow blink = USB initialized, waiting for host
@@ -204,3 +232,7 @@ fn SysTick() {
     // Minimal handler - just acknowledge the interrupt
     // The C example increments a counter here, but we don't need it
 }
+
+// Note: USB interrupt handler is registered via USBIntRegister() call
+// The TivaWare library handles the interrupt vector setup internally
+// USB0DeviceIntHandler is called automatically when USB interrupts occur

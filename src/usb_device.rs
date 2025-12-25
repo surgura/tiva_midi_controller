@@ -166,14 +166,49 @@ extern "C" {
 /// USB callback function type (matches tUSBCallback from usblib.h)
 pub type tUSBCallback = Option<unsafe extern "C" fn(*mut c_void, u32, u32, *mut c_void) -> u32>;
 
+/// CDC state enumeration (matches tCDCState from usbdcdc.h)
+#[repr(i32)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum tCDCState {
+    Idle = 0,
+    WaitingOnSendData = 1,
+    WaitingOnReceiveData = 2,
+}
+
+/// Line coding structure (matches tLineCoding from usbdcdc.h)
+#[repr(C)]
+pub struct tLineCoding {
+    pub ui32Rate: u32,
+    pub ui8CharFormat: u8,
+    pub ui8ParityType: u8,
+    pub ui8DataBits: u8,
+}
+
 /// CDC serial instance (matches tCDCSerInstance from usbdcdc.h)
+/// NOTE: This structure is large and contains internal state managed by TivaWare.
+/// The C code initializes all fields, so we only need to ensure correct layout.
 #[repr(C)]
 pub struct tCDCSerInstance {
-    pub ui32Base: u32,
-    pub ui32Flags: u32,
-    pub ui16USBBase: u16,
-    pub ui16USBEndpoint: u16,
-    pub ui8USBInterface: u8,
+    pub ui32USBBase: u32,                    // Offset 0
+    pub sDevInfo: tDeviceInfo,               // Offset 4 - CRITICAL: This is where callbacks are stored!
+    pub iCDCRxState: tCDCState,              // Offset varies
+    pub iCDCTxState: tCDCState,
+    pub iCDCRequestState: tCDCState,
+    pub iCDCInterruptState: tCDCState,
+    pub ui8PendingRequest: u8,
+    pub ui16BreakDuration: u16,
+    pub ui16ControlLineState: u16,
+    pub ui16SerialState: u16,
+    pub ui16DeferredOpFlags: u16,
+    pub ui16LastTxSize: u16,
+    pub sLineCoding: tLineCoding,
+    pub bRxBlocked: bool,
+    pub bControlBlocked: bool,
+    pub bConnected: bool,
+    pub ui8ControlEndpoint: u8,
+    pub ui8BulkINEndpoint: u8,
+    pub ui8BulkOUTEndpoint: u8,
+    pub ui8InterfaceControl: u8,
     pub ui8InterfaceData: u8,
 }
 

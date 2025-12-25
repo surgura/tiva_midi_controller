@@ -22,6 +22,14 @@ debug-build:
 flash:
 	openocd -f openocd.cfg -c "program $(BIN) 0x0 verify reset exit"
 
+# Flash debug build (for debugging with GDB)
+flash-debug:
+	@echo "Flashing debug build..."
+	@BIN_DEBUG=$$(mktemp); \
+	arm-none-eabi-objcopy -O binary --only-section=.vector_table --only-section=.text --only-section=.rodata --only-section=.data --gap-fill=0xff $(ELF_DEBUG) $$BIN_DEBUG; \
+	openocd -f openocd.cfg -c "program $$BIN_DEBUG 0x0 verify reset exit"; \
+	rm -f $$BIN_DEBUG
+
 # Start OpenOCD in the background for debugging
 # Note: May need sudo for USB access
 debug:
@@ -69,6 +77,63 @@ debug-stop:
 		echo "OpenOCD is not running"; \
 	fi
 
+# Connect GDB to OpenOCD with USB debugging script
+# Note: This will run interactively - unplug/replug USB device to trigger enumeration
+gdb-usb:
+	@if [ ! -f $(OPENOCD_PID) ]; then \
+		echo "Error: OpenOCD is not running. Start it with: make debug"; \
+		exit 1; \
+	fi
+	@if [ ! -f $(ELF) ]; then \
+		echo "Error: Debug build not found. Run: make debug-build"; \
+		exit 1; \
+	fi
+	@echo "Using GDB: $(GDB)"
+	@echo "NOTE: GDB will run interactively. Unplug and replug USB device to trigger enumeration."
+	@echo "Breakpoints will show USB interrupt activity. Press Ctrl+C to exit."
+	@if echo "$(GDB)" | grep -q "arm-none-eabi"; then \
+		$(GDB) $(ELF) -x debug_usb.gdb; \
+	else \
+		echo "Using system GDB - setting ARM architecture..."; \
+		$(GDB) $(ELF) -ex "set architecture arm" -x debug_usb.gdb; \
+	fi
+
+# Connect GDB to debug jump table
+gdb-jt:
+	@if [ ! -f $(OPENOCD_PID) ]; then \
+		echo "Error: OpenOCD is not running. Start it with: make debug"; \
+		exit 1; \
+	fi
+	@if [ ! -f $(ELF) ]; then \
+		echo "Error: Debug build not found. Run: make debug-build"; \
+		exit 1; \
+	fi
+	@echo "Using GDB: $(GDB)"
+	@if echo "$(GDB)" | grep -q "arm-none-eabi"; then \
+		$(GDB) $(ELF) -x debug_jumptable.gdb; \
+	else \
+		echo "Using system GDB - setting ARM architecture..."; \
+		$(GDB) $(ELF) -ex "set architecture arm" -x debug_jumptable.gdb; \
+	fi
+
+# Connect GDB to debug HardFault
+gdb-hf:
+	@if [ ! -f $(OPENOCD_PID) ]; then \
+		echo "Error: OpenOCD is not running. Start it with: make debug"; \
+		exit 1; \
+	fi
+	@if [ ! -f $(ELF) ]; then \
+		echo "Error: Debug build not found. Run: make debug-build"; \
+		exit 1; \
+	fi
+	@echo "Using GDB: $(GDB)"
+	@if echo "$(GDB)" | grep -q "arm-none-eabi"; then \
+		$(GDB) $(ELF) -x debug_hardfault.gdb; \
+	else \
+		echo "Using system GDB - setting ARM architecture..."; \
+		$(GDB) $(ELF) -ex "set architecture arm" -x debug_hardfault.gdb; \
+	fi
+
 # Connect GDB to OpenOCD
 gdb:
 	@if [ ! -f $(OPENOCD_PID) ]; then \
@@ -107,4 +172,4 @@ clean:
 	cargo clean
 	rm -f $(OPENOCD_PID) .openocd.log
 
-.PHONY: all flash debug debug-stop gdb clean
+.PHONY: all flash flash-debug debug debug-stop gdb gdb-usb gdb-hf gdb-jt clean
