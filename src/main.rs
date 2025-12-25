@@ -71,12 +71,12 @@ fn main() -> ! {
     sysctl.rcgcgpio.modify(|r, w| unsafe { w.bits(r.bits() | (1 << 5)) });
     while sysctl.prgpio.read().bits() & (1 << 5) == 0 {}
 
-    // Configure PF1 (red LED) as output
-    portf.dir.modify(|r, w| unsafe { w.bits(r.bits() | 0x02) });
-    portf.den.modify(|r, w| unsafe { w.bits(r.bits() | 0x02) });
+    // Configure PF2 (blue LED) as output
+    portf.dir.modify(|r, w| unsafe { w.bits(r.bits() | 0x04) });
+    portf.den.modify(|r, w| unsafe { w.bits(r.bits() | 0x04) });
     
     // Initialize LED to OFF
-    portf.data.modify(|r, w| unsafe { w.bits(r.bits() & !0x02) });
+    portf.data.modify(|r, w| unsafe { w.bits(r.bits() & !0x04) });
     
     // Enable FPU lazy stacking (required for USB interrupt handlers)
     // This must be done early, before any USB initialization
@@ -203,11 +203,11 @@ fn main() -> ! {
         cortex_m::asm::nop();
     }
 
-    // Main loop - slow blink = USB initialized, waiting for host
+    // Main loop - blink blue LED to show USB is working
     loop {
-        // Blink LED slowly to show code is running and waiting for USB connection
+        // Blink blue LED slowly to show code is running and USB is working
         // Turn ON
-        portf.data.modify(|r, w| unsafe { w.bits(r.bits() | 0x02) });
+        portf.data.modify(|r, w| unsafe { w.bits(r.bits() | 0x04) });
         
         // Delay (~1 second at 50MHz)
         for _ in 0..5_000_000 {
@@ -215,7 +215,7 @@ fn main() -> ! {
         }
         
         // Turn OFF
-        portf.data.modify(|r, w| unsafe { w.bits(r.bits() & !0x02) });
+        portf.data.modify(|r, w| unsafe { w.bits(r.bits() & !0x04) });
         
         // Delay (~1 second at 50MHz)
         for _ in 0..5_000_000 {
