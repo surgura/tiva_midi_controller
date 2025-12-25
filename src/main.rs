@@ -5,6 +5,7 @@
 use cortex_m_rt::entry;
 use tm4c123x::{GPIO_PORTD, GPIO_PORTF, SYSCTL};
 use core::ptr;
+use core::ffi::c_void;
 
 // Custom panic handler that blinks LED rapidly (replaces panic_halt)
 #[panic_handler]
@@ -33,6 +34,8 @@ fn panic_handler(_info: &core::panic::PanicInfo) -> ! {
 mod usb_device;
 mod usb_descriptors;
 
+use cortex_m_rt::exception;
+
 /// USB Device Example
 /// Makes the TM4C123 enumerate as a USB CDC serial port when connected to a computer.
 #[entry]
@@ -48,10 +51,33 @@ fn main() -> ! {
     portf.dir.modify(|r, w| unsafe { w.bits(r.bits() | 0x02) });
     portf.den.modify(|r, w| unsafe { w.bits(r.bits() | 0x02) });
     
+    // Initialize LED to OFF
+    portf.data.modify(|r, w| unsafe { w.bits(r.bits() & !0x02) });
+    
     // Enable FPU lazy stacking (required for USB interrupt handlers)
     // This must be done early, before any USB initialization
     unsafe {
         usb_device::FPULazyStackingEnable();
+    }
+    
+    // Set the clocking to run from the PLL at 50MHz (like C example)
+    // This is critical for USB to work properly
+    unsafe {
+        usb_device::SysCtlClockSet(
+            usb_device::sysctl_clock::SYSCTL_SYSDIV_4 |
+            usb_device::sysctl_clock::SYSCTL_USE_PLL |
+            usb_device::sysctl_clock::SYSCTL_OSC_MAIN |
+            usb_device::sysctl_clock::SYSCTL_XTAL_16MHZ
+        );
+    }
+    
+    // Enable the system tick (like C example)
+    // USB library may use this for timing
+    unsafe {
+        let sys_clock = usb_device::SysCtlClockGet();
+        usb_device::SysTickPeriodSet(sys_clock / 100); // 100 ticks per second
+        usb_device::SysTickIntEnable();
+        usb_device::SysTickEnable();
     }
     
     // Configure USB pins
@@ -80,13 +106,14 @@ fn main() -> ! {
     // This ensures it lives for the lifetime of the program
     static mut CDC_DEVICE: Option<usb_device::tUSBDCDCDevice> = None;
     unsafe {
+        // Initialize the structure first
         CDC_DEVICE = Some(usb_device::tUSBDCDCDevice {
             ui16VID: usb_device::usb_ids::USB_VID_TI_1CBE,
             ui16PID: usb_device::usb_ids::USB_PID_SERIAL,
             ui16MaxPowermA: 0,
             ui8PwrAttributes: usb_device::usb_conf::USB_CONF_ATTR_SELF_PWR,
             pfnControlCallback: Some(usb_descriptors::control_handler),
-            pvControlCBData: ptr::null_mut(),
+            pvControlCBData: ptr::null_mut(), // Will set to &CDC_DEVICE after initialization
             pfnRxCallback: Some(usb_descriptors::rx_handler),
             pvRxCBData: ptr::null_mut(),
             pfnTxCallback: Some(usb_descriptors::tx_handler),
@@ -102,50 +129,78 @@ fn main() -> ! {
                 ui8InterfaceData: 0,
             },
         });
+        
+        // Set callback data to point to the CDC device structure (like C example)
+        if let Some(device) = CDC_DEVICE.as_mut() {
+            device.pvControlCBData = device as *mut _ as *mut c_void;
+            device.pvRxCBData = device as *mut _ as *mut c_void;
+            device.pvTxCBData = device as *mut _ as *mut c_void;
+        }
+    }
+    
+    // Register USB interrupt handler BEFORE USBDCDCInit
+    // USBDCDInit (called by USBDCDCInit) will enable the interrupt at NVIC level
+    // but we need to register the handler first
+    unsafe {
+        usb_device::USBIntRegister(
+            usb_device::usb_base::USB0_BASE,
+            usb_device::USB0DeviceIntHandler,
+        );
     }
     
     // CRITICAL: First call to external C code - USBDCDCInit
     // This calls USBDCDCCompositeInit which then calls USBDCDInit
     // USBDCDInit does hardware initialization (reset, enable clock, PLL, etc.)
+    // and calls USBDevConnect internally
     unsafe {
         // Call USBDCDCInit directly like the C example does
         // The C example doesn't disable interrupts or do any special setup
         // USBDCDCInit handles all hardware initialization internally
         // Use static CDC device structure like C example
-        let cdc_device_ptr = unsafe { CDC_DEVICE.as_mut().unwrap() };
+        let cdc_device_ptr = CDC_DEVICE.as_mut().unwrap();
         let instance = usb_device::USBDCDCInit(0, cdc_device_ptr);
         
         if instance.is_null() {
             // Initialization failed - rapid blink forever
             loop {
-                portf.data.modify(|r, w| unsafe { w.bits(r.bits() ^ 0x02) });
+                portf.data.modify(|r, w| w.bits(r.bits() ^ 0x02));
                 for _ in 0..50_000 {
                     cortex_m::asm::nop();
                 }
             }
         }
         
-        // Register USB interrupt handler (must be done before connecting)
-        usb_device::USBIntRegister(
-            usb_device::usb_base::USB0_BASE,
-            usb_device::USB0DeviceIntHandler,
-        );
-        
-        // Connect USB device to bus
-        usb_device::USBDevConnect(usb_device::usb_base::USB0_BASE);
-        
         // Enable global interrupts (like C example does after USBDCDCInit)
+        // USBDCDInit already calls USBDevConnect and enables USB interrupt at NVIC
         cortex_m::interrupt::enable();
     }
 
     // Main loop - slow blink = USB initialized, waiting for host
     loop {
         // Blink LED slowly to show code is running and waiting for USB connection
-        portf.data.modify(|r, w| unsafe { w.bits(r.bits() ^ 0x02) });
+        // Turn ON
+        portf.data.modify(|r, w| unsafe { w.bits(r.bits() | 0x02) });
         
-        // Delay (~1 second)
+        // Delay (~1 second at 50MHz)
+        for _ in 0..5_000_000 {
+            cortex_m::asm::nop();
+        }
+        
+        // Turn OFF
+        portf.data.modify(|r, w| unsafe { w.bits(r.bits() & !0x02) });
+        
+        // Delay (~1 second at 50MHz)
         for _ in 0..5_000_000 {
             cortex_m::asm::nop();
         }
     }
+}
+
+// SysTick interrupt handler (required when SysTick interrupts are enabled)
+// The USB library may use SysTick for timing
+#[exception]
+#[allow(non_snake_case)]
+fn SysTick() {
+    // Minimal handler - just acknowledge the interrupt
+    // The C example increments a counter here, but we don't need it
 }

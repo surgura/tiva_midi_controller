@@ -395,6 +395,12 @@ extern "C" {
     /// Enable USB PLL
     pub fn SysCtlUSBPLLEnable();
     
+    /// Set system clock configuration
+    pub fn SysCtlClockSet(ui32Config: u32);
+    
+    /// Get system clock frequency
+    pub fn SysCtlClockGet() -> u32;
+    
     /// Configure GPIO pins for USB analog mode
     pub fn GPIOPinTypeUSBAnalog(ui32Port: u32, ui8Pins: u8);
     
@@ -415,12 +421,29 @@ extern "C" {
     
     /// Enable FPU lazy stacking for interrupt handlers
     pub fn FPULazyStackingEnable();
+    
+    /// Set SysTick period
+    pub fn SysTickPeriodSet(ui32Period: u32);
+    
+    /// Enable SysTick interrupt
+    pub fn SysTickIntEnable();
+    
+    /// Enable SysTick counter
+    pub fn SysTickEnable();
 }
 
 // Constants for GPIO and System Control
 pub mod sysctl_periph {
     pub const SYSCTL_PERIPH_GPIOD: u32 = 0x00000008;
     pub const SYSCTL_PERIPH_USB0: u32 = 0x01000010;
+}
+
+// System clock configuration constants (from sysctl.h)
+pub mod sysctl_clock {
+    pub const SYSCTL_SYSDIV_4: u32 = 0x01C00000;  // Processor clock is osc/pll /4
+    pub const SYSCTL_USE_PLL: u32 = 0x00000000;   // System clock is the PLL clock
+    pub const SYSCTL_OSC_MAIN: u32 = 0x00000000;  // Osc source is main osc
+    pub const SYSCTL_XTAL_16MHZ: u32 = 0x00000540; // External crystal is 16 MHz
 }
 
 pub mod gpio {

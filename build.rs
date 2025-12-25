@@ -71,13 +71,14 @@ fn compile_tivaware_usb() {
     build.file(format!("{}/driverlib/usb.c", tivaware_path));
     
     // Compile additional driverlib files needed by USB code
-    // These provide sysctl, interrupt, gpio, cpu, fpu functions that USB code calls
+    // These provide sysctl, interrupt, gpio, cpu, fpu, systick functions that USB code calls
     build
         .file(format!("{}/driverlib/sysctl.c", tivaware_path))
         .file(format!("{}/driverlib/interrupt.c", tivaware_path))
         .file(format!("{}/driverlib/gpio.c", tivaware_path))
         .file(format!("{}/driverlib/cpu.c", tivaware_path))
-        .file(format!("{}/driverlib/fpu.c", tivaware_path));
+        .file(format!("{}/driverlib/fpu.c", tivaware_path))
+        .file(format!("{}/driverlib/systick.c", tivaware_path));
     
     // Compile and link
     build.compile("tivaware_usb");
@@ -104,5 +105,6 @@ fn compile_tivaware_usb() {
     println!("cargo:rerun-if-changed={}/driverlib/gpio.c", tivaware_path);
     println!("cargo:rerun-if-changed={}/driverlib/cpu.c", tivaware_path);
     println!("cargo:rerun-if-changed={}/driverlib/fpu.c", tivaware_path);
+    println!("cargo:rerun-if-changed={}/driverlib/systick.c", tivaware_path);
 }
 
